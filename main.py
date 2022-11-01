@@ -7,6 +7,19 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
 
 
+def get_token():
+    with open('token.txt', 'r') as file:
+        token: str = file.read().strip()
+    return token
+
+
+bot = Bot(token=get_token())
+dp = Dispatcher(bot)
+headers = {
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36'
+}
+
+
 def is_url(url: str):
     match_obj = re.compile(r"https://edu\.skysmart\.ru/student/[a-z]+", re.IGNORECASE)
 
@@ -20,7 +33,7 @@ def get_uuid(url: str):
 
 
 async def get_position(api_uuid: str):
-    async with httpx.AsyncClient(verify=False) as client:
+    async with httpx.AsyncClient() as client:
         response = await client.get(
             headers=headers,
             url=f'https://amogus.somee.com/API/GetQueuePosition?uuid={api_uuid}'
@@ -33,19 +46,6 @@ async def get_position(api_uuid: str):
             )
 
     return int(response.content) + 1
-
-
-def get_token():
-    with open('token.txt', 'r') as file:
-        token: str = file.read().strip()
-    return token
-
-
-bot = Bot(token=get_token())
-dp = Dispatcher(bot)
-headers = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36'
-}
 
 
 @dp.message_handler(commands=['start'])
@@ -77,7 +77,7 @@ async def on_link(msg: types.Message):
 
     ready = False
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient() as client: # fix this SHIT on windows
         response = await client.get(
             headers=headers,
             url=f'https://amogus.somee.com/API/LinkRedirect?link={url}',
@@ -105,10 +105,11 @@ async def on_link(msg: types.Message):
                 while response.content == b'null' or response.content == b'':
                     pass
                 else:
-                    answers_dict: dict = json.loads(response.text)
+                    response_dict: dict = json.loads(response.text)
+                    answers_dict: dict = response_dict['SolverOutput']
                     async with aiofiles.open('answers.txt', 'w', encoding='utf8') as file:
                         await file.write(
-                            str(answers_dict['SolverOutput']).replace('\\', '').replace('\r\n', '')
+                            str(answers_dict['Answers']).replace('\\', '').replace('\r\n', '')
                         )
                     ready = True
     while ready == False:
