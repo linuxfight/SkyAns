@@ -16,7 +16,8 @@ def get_token():
 bot = Bot(token=get_token())
 dp = Dispatcher(bot)
 headers = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.75 Safari/537.36'
+    "Content-Type": "application/json;charset=UTF-8",
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)"
 }
 
 
