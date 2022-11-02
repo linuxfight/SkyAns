@@ -26,7 +26,7 @@ headers = {
 def remove_http_stuff(text: str):
     returned_text = text
 
-    returned_text = re.sub(r'<vim-math id="[^"]*">', '', returned_text)
+    returned_text = re.sub(r'(<(/?[^>]+)>)', '', returned_text)
 
     return returned_text
 
@@ -88,62 +88,71 @@ async def on_link(msg: types.Message):
 
     ready = False
 
-    try:
-        async with httpx.AsyncClient() as client:  # fix this SHIT on windows
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                url=f'https://amogus.somee.com/API/LinkRedirect?link={url}',
+                follow_redirects=True
+            )
+        except httpx.ReadError:
+            logging.exception("message")
             response = await client.get(
                 headers=headers,
                 url=f'https://amogus.somee.com/API/LinkRedirect?link={url}',
                 follow_redirects=True
             )
 
-            api_uuid = get_uuid(str(response.url))
+        api_uuid = get_uuid(str(response.url))
 
-            finished = False
+        finished = False
 
-            while await get_position(api_uuid) > 0:
-                pass
+        while await get_position(api_uuid) > 0:
+            pass
+        else:
+            while not finished:
+                try:
+                    response = await client.get(
+                        headers=headers,
+                        url=f'https://amogus.somee.com/API/RemoveFinishedItem?uuid={api_uuid}'
+                    )
+                    if response.text != 'null':
+                        finished = True
+                except ConnectionResetError:
+                    pass
             else:
-                while finished == False:
-                    try:
-                        response = await client.get(
-                            headers=headers,
-                            url=f'https://amogus.somee.com/API/RemoveFinishedItem?uuid={api_uuid}'
-                        )
-                        if response.text != 'null':
-                            finished = True
-                    except ConnectionResetError:
-                        pass
+                while response.content == b'null' or response.content == b'':
+                    pass
                 else:
-                    while response.content == b'null' or response.content == b'':
-                        pass
-                    else:
-                        response_dict: dict = json.loads(response.text)
-                        answers_dict: dict = response_dict['SolverOutput']
-                        answers: list[dict] = answers_dict['Answers']
-                        result = []
-                        for answer in answers:
-                            answer_text = str(answer['Data']).replace('\\', '').replace('\r\n', '').replace('<p>', '').replace('<b>', '').replace('</vim-math>', '').replace('</p>', '').replace('<vim-text type="strong">', '').replace('</b>', '').replace('</vim-text>', '').replace('<math-input>', '').replace('<math-input-answer>', '').replace('</math-input-answer>', '').replace('</math-input>', '').replace('<vim-blockquote importance="basic">', '').replace('</vim-blockquote>', '').replace('(', '').replace(')', '')
-                            result_object = {
-                                'Title': answer['Title'],
-                                'Data': remove_http_stuff(answer_text)
-                            }
-                            result.append(result_object)
-                            await bot.send_message(
-                                chat_id=msg.chat.id,
-                                text=f"Задание: {result_object['Title']}\n"
-                                     f"Ответ: {result_object['Data']}",
-                                reply_to_message_id=msg.message_id
-                            )
-                        async with aiofiles.open('answers.txt', 'w', encoding='utf8') as file:
-                            await file.write(
-                                str(result)
-                            )
-                        ready = True
-    except httpx.ReadError:
-        logging.exception("message")
-    while ready == False:
+                    response_dict: dict = json.loads(response.text)
+                    answers_dict: dict = response_dict['SolverOutput']
+                    answers: list[dict] = answers_dict['Answers']
+                    result = []
+                    for answer in answers:
+                        answer_text = str(answer['Data']).replace('\\', '') \
+                            .replace('\r\n', '').replace('(', '').replace(')', '')
+                        result_object = {
+                            'Title': answer['Title'],
+                            'Data': remove_http_stuff(answer_text)
+                        }
+                        result.append(result_object)
+                        await bot.send_message(
+                            chat_id=msg.chat.id,
+                            text=f"{result_object['Title']}\n"
+                                 f"{result_object['Data']}",
+                            reply_to_message_id=msg.message_id
+                        )
+                    async with aiofiles.open('answers.txt', 'w', encoding='utf8') as file:
+                        await file.write(
+                            str(result)
+                        )
+                    ready = True
+    while ready is False:
         pass
     else:
+        await bot.send_chat_action(
+            chat_id=msg.chat.id,
+            action='upload_document'
+        )
         await bot.send_document(
             chat_id=msg.chat.id,
             reply_to_message_id=msg.message_id,
