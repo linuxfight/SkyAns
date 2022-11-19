@@ -1,5 +1,4 @@
 import asyncio
-import aiofiles
 import re
 import json
 import httpx
@@ -23,6 +22,25 @@ headers = {
 }
 
 
+def format_answer(text: str):
+    new_text = text[text.find('Ответ:'):]
+
+    return new_text
+
+
+def format_string(text: str):
+    new_text = text.replace('\\', '')
+    new_text = new_text.replace('\r\n', '')
+    new_text = new_text.replace('(', '')
+    new_text = new_text.replace(')', '')
+
+    new_text = new_text.replace('degree', '°')
+    new_text = new_text.replace('angle', '∠')
+    new_text = new_text.replace('Ответ:', 'Ответ: ')
+
+    return new_text
+
+
 def remove_http_stuff(text: str):
     returned_text = text
 
@@ -44,7 +62,7 @@ def get_uuid(url: str):
 
 
 async def get_position(api_uuid: str):
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(verify=False) as client:
         response = await client.get(
             headers=headers,
             url=f'https://amogus.somee.com/API/GetQueuePosition?uuid={api_uuid}'
@@ -86,21 +104,12 @@ async def on_link(msg: types.Message):
     if not url:
         return
 
-    ready = False
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(
-                url=f'https://amogus.somee.com/API/LinkRedirect?link={url}',
-                follow_redirects=True
-            )
-        except httpx.ReadError:
-            logging.exception("message")
-            response = await client.get(
-                headers=headers,
-                url=f'https://amogus.somee.com/API/LinkRedirect?link={url}',
-                follow_redirects=True
-            )
+    async with httpx.AsyncClient(verify=False) as client:
+        response = await client.get(
+            headers=headers,
+            url=f'https://amogus.somee.com/API/LinkRedirect?link={url}',
+            follow_redirects=True
+        )
 
         api_uuid = get_uuid(str(response.url))
 
@@ -128,11 +137,10 @@ async def on_link(msg: types.Message):
                     answers: list[dict] = answers_dict['Answers']
                     result = []
                     for answer in answers:
-                        answer_text = str(answer['Data']).replace('\\', '') \
-                            .replace('\r\n', '').replace('(', '').replace(')', '')
+                        answer_text = format_string(str(answer['Data']))
                         result_object = {
                             'Title': answer['Title'],
-                            'Data': remove_http_stuff(answer_text)
+                            'Data': format_answer(remove_http_stuff(answer_text))
                         }
                         result.append(result_object)
                         await bot.send_message(
@@ -141,26 +149,6 @@ async def on_link(msg: types.Message):
                                  f"{result_object['Data']}",
                             reply_to_message_id=msg.message_id
                         )
-                    async with aiofiles.open('answers.txt', 'w', encoding='utf8') as file:
-                        await file.write(
-                            str(result)
-                        )
-                    ready = True
-    while ready is False:
-        pass
-    else:
-        await bot.send_chat_action(
-            chat_id=msg.chat.id,
-            action='upload_document'
-        )
-        await bot.send_document(
-            chat_id=msg.chat.id,
-            reply_to_message_id=msg.message_id,
-            document=types.InputFile(
-                path_or_bytesio='answers.txt',
-                filename='answers.txt'
-            )
-        )
 
 
 if __name__ == '__main__':
